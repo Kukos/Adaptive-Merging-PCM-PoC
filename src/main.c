@@ -17,5 +17,8 @@ ___after_main___(0) void deinit(void)
 
 int main(void)
 {
+
+    db_raw_experiment_workload(1000);
+
     return 0;
 }
