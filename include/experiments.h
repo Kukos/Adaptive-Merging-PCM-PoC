@@ -53,4 +53,15 @@ void db_raw_experiment_workload(size_t queries);
 */
 void db_index_experiment_workload(size_t queries);
 
+/*
+    This is only test workload for db la to check all of functions
+
+    PARAMS
+    @IN entries - number of entries in table
+
+    RETURN
+    This is a void function
+*/
+void db_am_experiment_workload(size_t entries);
+
 #endif

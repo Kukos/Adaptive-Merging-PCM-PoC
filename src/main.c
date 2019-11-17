@@ -20,6 +20,7 @@ int main(void)
 
     db_raw_experiment_workload(1000);
     db_index_experiment_workload(1000);
+    db_am_experiment_workload(1000000);
 
     return 0;
 }
