@@ -19,6 +19,7 @@ int main(void)
 {
 
     db_raw_experiment_workload(1000);
+    db_index_experiment_workload(1000);
 
     return 0;
 }
