@@ -219,7 +219,9 @@ static double create_partitions_for_entries(DB_AM *am, size_t entries)
     am->num_entries_in_partitions += entries;
     am->num_of_partitions = INT_CEIL_DIV(entries * am->entry_size, am->sort_buffer_size);
 
-    time += pcm_write(am->pcm, entries * am->entry_size);
+    if (am->index->type != BTREE_SKIP_COST && am->invalidation_type != INVALIDATION_SKIP)
+        time += pcm_write(am->pcm, entries * am->entry_size);
+
     db_stat_update_misc_time(time);
 
     return time;
@@ -280,6 +282,8 @@ static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries
 
             break;
         }
+        case INVALIDATION_SKIP:
+            break;
 
         default:
             break;

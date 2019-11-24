@@ -282,6 +282,8 @@ double db_index_insert(DB_index *index, size_t entries)
 
                 break;
             }
+            case BTREE_SKIP_COST:
+                break;
             default:
                 break;
         }
@@ -319,7 +321,8 @@ double db_index_bulkload(DB_index *index, size_t entries)
     diff_inners = new_inners - old_inners;
 
     /* build leaves */
-    time += pcm_write(index->pcm, (size_t)((double)index->node_size * index->node_factor) * diff_leaves);
+    if (index->type !=  BTREE_SKIP_COST)
+        time += pcm_write(index->pcm, (size_t)((double)index->node_size * index->node_factor) * diff_leaves);
 
     /* find place for each leaf */
     time += db_index_point_search(index, diff_leaves);
@@ -373,7 +376,8 @@ double db_index_bulkload(DB_index *index, size_t entries)
             }
             break;
         }
-
+        case BTREE_SKIP_COST:
+            break;
         default:
             break;
     }
@@ -425,6 +429,8 @@ double db_index_point_search(DB_index *index, size_t entries)
 
                 break;
             }
+            case BTREE_SKIP_COST:
+                break;
 
             default:
                 break;
@@ -449,7 +455,8 @@ double db_index_range_search(DB_index *index, size_t entries)
     time += db_index_point_search(index, 1);
 
     /* scan all */
-    time += pcm_read(index->pcm, leaves * (size_t)((double)index->node_size * index->node_factor));
+    if (index->type != BTREE_SKIP_COST)
+        time += pcm_read(index->pcm, leaves * (size_t)((double)index->node_size * index->node_factor));
 
 
     db_stat_update_index_time(time);

@@ -15,6 +15,7 @@ typedef enum
     INVALIDATION_FLAG,
     INVALIDATION_BITMAP,
     INVALIDATION_JOURNAL,
+    INVALIDATION_SKIP,
 } invalidation_type_t;
 
 #endif

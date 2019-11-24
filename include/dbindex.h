@@ -29,6 +29,7 @@ typedef enum
     BTREE_NORMAL,
     BTREE_UNSORTED_LEAVES,
     BTREE_UNSORTED_INNERS_UNSORTED_LEAVES,
+    BTREE_SKIP_COST,
 } btree_type_t;
 
 typedef struct DB_index
