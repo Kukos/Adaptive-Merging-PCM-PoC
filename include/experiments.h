@@ -11,6 +11,7 @@
 */
 
 #include <stddef.h>
+#include <dbutils.h>
 
 /*
     Normal workload experiment
@@ -63,5 +64,38 @@ void db_index_experiment_workload(size_t queries);
     This is a void function
 */
 void db_am_experiment_workload(size_t entries);
+
+
+/*
+    This experiment shows invalidation impact on whole AM process time and PCM wearout
+
+    PARAMS
+    @IN file - base file name
+    @IN key_size - sizeof(key) in Table T
+    @IN data_size - sizeof(Record) in Table T
+    @IN entries - how many entries is in Table T
+    @IN type - query type used to build index
+    @IN selectivity - query selectivity
+
+    RETURN
+    This is a void function
+*/
+void experiment1(const char * const file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
+
+/*
+    This experiment shows Btree Type impact on whole AM process time and PCM wearout
+
+    PARAMS
+    @IN file - base file name
+    @IN key_size - sizeof(key) in Table T
+    @IN data_size - sizeof(Record) in Table T
+    @IN entries - how many entries is in Table T
+    @IN type - query type used to build index
+    @IN selectivity - query selectivity
+
+    RETURN
+    This is a void function
+*/
+void experiment2(const char * const file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
 
 #endif

@@ -18,9 +18,12 @@ ___after_main___(0) void deinit(void)
 int main(void)
 {
 
-    db_raw_experiment_workload(1000);
-    db_index_experiment_workload(1000);
-    db_am_experiment_workload(1000000);
+    // db_raw_experiment_workload(1000);
+    // db_index_experiment_workload(1000);
+    // db_am_experiment_workload(1000000);
+
+    experiment1("ex1", sizeof(long), 140, 10000000, QUERY_RANDOM, 0.05);
+    experiment2("ex2", sizeof(long), 140, 10000000, QUERY_RANDOM, 0.05);
 
     return 0;
 }
