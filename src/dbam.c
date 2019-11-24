@@ -266,8 +266,8 @@ static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries
         }
         case INVALIDATION_BITMAP:
         {
-            /* each partition has a bitmap, also 1 bitmap can store 64 entries */
-            time = pcm_write(am->pcm, (am->num_of_partitions + entries / 64) * 8);
+            /* each partition has a bitmap, also 1 bitmap can store 64 entries, so each byte can store 8 entries */
+            time = pcm_write(am->pcm, (am->num_of_partitions + INT_CEIL_DIV(entries, 8)));
             db_stat_update_invalidation_time(time);
             total_time += time;
 
