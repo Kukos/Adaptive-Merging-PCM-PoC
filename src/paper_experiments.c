@@ -23,7 +23,7 @@ void experiment1(const char * const file, size_t key_size, size_t data_size, siz
     char file_name[1024];
 
     const invalidation_type_t invalidation_type[] = {INVALIDATION_FLAG, INVALIDATION_BITMAP, INVALIDATION_JOURNAL};
-    const char * const invalidation_names[] = {tostring(INVALIDATION_FLAG), tostring(INVALIDATION_BITMAP), tostring(INVALIDATION_JOURNAL)};
+    const char * const invalidation_names[] = {"Flag", "Bitmap", "Journal"};
 
     TRACE();
 
@@ -31,7 +31,7 @@ void experiment1(const char * const file, size_t key_size, size_t data_size, siz
 
     snprintf(file_name, sizeof(file_name), "%s_invalidation.txt", file);
     fd = open(file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
-    dprintf(fd, "TYPE\tTIME\tPCM WEAROUT\n");
+    dprintf(fd, "TYPE\tTime\tPCM Wear-out\n");
 
     for (i = 0; i < ARRAY_SIZE(invalidation_type); ++i)
     {
@@ -75,7 +75,7 @@ void experiment2(const char * const file, size_t key_size, size_t data_size, siz
     char file_name[1024];
 
     const btree_type_t btree_type[] = {BTREE_NORMAL, BTREE_UNSORTED_LEAVES, BTREE_UNSORTED_INNERS_UNSORTED_LEAVES};
-    const char * const btree_names[] = {tostring(BTREE_NORMAL), tostring(BTREE_UNSORTED_LEAVES), tostring(BTREE_UNSORTED_INNERS_UNSORTED_LEAVES)};
+    const char * const btree_names[] = {"Normal", "Uns leaves", "Uns nodes"};
 
     TRACE();
 
@@ -83,7 +83,7 @@ void experiment2(const char * const file, size_t key_size, size_t data_size, siz
 
     snprintf(file_name, sizeof(file_name), "%s_BTREE.txt", file);
     fd = open(file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
-    dprintf(fd, "TYPE\tTIME\tPCM WEAROUT\n");
+    dprintf(fd, "TYPE\tTime\tPCM Wear-out\n");
 
     for (i = 0; i < ARRAY_SIZE(btree_type); ++i)
     {
@@ -176,6 +176,8 @@ void experiment3(const char * const file, size_t key_size, size_t data_size, siz
     raw_time = db_stat_get_current_time();
     db_stat_summary_print();
 
+    db_pam_search(pam, type, 1);
+    db_am_search(am, type, 1);
     db_stat_reset();
     snprintf(query_file_name, sizeof(query_file_name), "%s_per_query.txt", file);
     fd = open(query_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
@@ -195,6 +197,7 @@ void experiment3(const char * const file, size_t key_size, size_t data_size, siz
         am_time = db_stat_get_current_time();
         total_am_time += am_time;
 
+
         dprintf(fd, "%zu\t%lf\t%lf\t%lf\t%lf\n", i, index_time, raw_time, pam_time, am_time);
         printf("QUERY %zu:\tENTRIES  (%zu/%zu)\n", i, am->index->num_entries, am->index->num_entries + am->num_entries_in_partitions);
 
@@ -212,8 +215,9 @@ void experiment3(const char * const file, size_t key_size, size_t data_size, siz
 
     snprintf(total_file_name, sizeof(total_file_name), "%s_total.txt", file);
     fd = open(total_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
-    dprintf(fd, "PAM Time\tAM Time\tPAM Wearout\tAM Wearout\n");
-    dprintf(fd, "%lf\t%lf\t%zu\t%zu\n", total_pam_time, total_am_time, pcm_pam->wearout, pcm_am->wearout);
+    dprintf(fd, "Type\tTime\tPCM Wear-out\n");
+    dprintf(fd, "AM\t%lf\t%zu\n", total_am_time, pcm_am->wearout);
+    dprintf(fd, "PAM\t%lf\t%zu\n", total_pam_time, pcm_pam->wearout);
     close(fd);
 
     pcm_destroy(pcm_index);
