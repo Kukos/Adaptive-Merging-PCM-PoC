@@ -24,6 +24,9 @@ int main(void)
 
     experiment1("ex1", sizeof(long), 140, 10000000, QUERY_RANDOM, 0.05);
     experiment2("ex2", sizeof(long), 140, 10000000, QUERY_RANDOM, 0.05);
+    experiment3("ex3_random", sizeof(long), 140, 10000000, QUERY_RANDOM, 0.05);
+    experiment3("ex3_newkeys", sizeof(long), 140, 10000000, QUERY_ALWAYS_NEW, 0.05);
+    experiment3("ex3_seq", sizeof(long), 140, 10000000, QUERY_SEQUENTIAL_PATTERN, 0.05);
 
     return 0;
 }

@@ -108,4 +108,21 @@ void experiment1(const char * const file, size_t key_size, size_t data_size, siz
 */
 void experiment2(const char * const file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
 
+/*
+    AM vs PAM.
+    Time per query + Total Time + Total Wearout
+
+    PARAMS
+    @IN file - base file name
+    @IN key_size - sizeof(key) in Table T
+    @IN data_size - sizeof(Record) in Table T
+    @IN entries - how many entries is in Table T
+    @IN type - query type used to build index
+    @IN selectivity - query selectivity
+
+    RETURN
+    This is a void function
+*/
+void experiment3(const char * const file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
+
 #endif
