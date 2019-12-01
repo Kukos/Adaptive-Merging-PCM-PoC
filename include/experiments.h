@@ -65,6 +65,16 @@ void db_index_experiment_workload(size_t queries);
 */
 void db_am_experiment_workload(size_t entries);
 
+/*
+    This is only test workload for db la to check all of functions
+
+    PARAMS
+    @IN entries - number of entries in table
+
+    RETURN
+    This is a void function
+*/
+void db_pam_experiment_workload(size_t entries);
 
 /*
     This experiment shows invalidation impact on whole AM process time and PCM wearout
