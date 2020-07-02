@@ -20,7 +20,7 @@ DB_PAM *db_pam_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entr
         FREE(pam);
         ERROR("db_am_create error\n", NULL);
     }
-    pam->am->index->type = BTREE_UNSORTED_INNERS_UNSORTED_LEAVES;
+    pam->am->index->type = CBTREE_UNSORTED_INNSERS;
 
     return pam;
 }

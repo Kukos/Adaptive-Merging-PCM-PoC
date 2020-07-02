@@ -74,8 +74,8 @@ void experiment2(const char * const file, size_t key_size, size_t data_size, siz
     int fd;
     char file_name[1024];
 
-    const btree_type_t btree_type[] = {BTREE_NORMAL, BTREE_UNSORTED_LEAVES, BTREE_UNSORTED_INNERS_UNSORTED_LEAVES};
-    const char * const btree_names[] = {"Normal", "Uns leaves", "Uns nodes"};
+    const btree_type_t btree_type[] = {BTREE_NORMAL, BTREE_UNSORTED_LEAVES, BTREE_UNSORTED_INNERS_UNSORTED_LEAVES, CBTREE, CBTREE_UNSORTED_INNSERS};
+    const char * const btree_names[] = {"B+Tree", "Uns leaves", "Uns nodes",  "CBTree", "CBTree-unsorted-inners"};
 
     TRACE();
 

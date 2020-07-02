@@ -6,6 +6,8 @@
 #include <dbstat.h>
 #include <dbutils.h>
 
+#define CBTREE_WAIT_FOR_SPLIT (1.5)
+
 #define DB_INDEX_LOG(n, k) (log(n) / log(k))
 
 /*
@@ -213,6 +215,7 @@ double db_index_insert(DB_index *index, size_t entries)
                 break;
             }
             case BTREE_UNSORTED_LEAVES:
+            case CBTREE: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
             {
                 /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
                 if (diff_leaves != 0)
@@ -245,6 +248,7 @@ double db_index_insert(DB_index *index, size_t entries)
                 break;
             }
             case BTREE_UNSORTED_INNERS_UNSORTED_LEAVES:
+            case CBTREE_UNSORTED_INNSERS: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
             {
                 /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
                 if (diff_leaves != 0)
@@ -352,6 +356,28 @@ double db_index_bulkload(DB_index *index, size_t entries)
             }
             break;
         }
+        case CBTREE: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
+        {
+            for (i = 0; i < diff_leaves / CBTREE_WAIT_FOR_SPLIT; ++i)
+            {
+                /* make a gap, or move to another inner */
+                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+
+                /* write down a key with pointer */
+                time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+            }
+
+            /* we calculate cost for inners, but if we need insert more inners than leaves, simulate this */
+            for (j = 0; j < (ssize_t)(diff_inners - diff_leaves); ++j)
+            {
+                /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
+                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+
+                /* write down a key with pointer */
+                time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+            }
+            break;
+        }
         case BTREE_UNSORTED_INNERS_UNSORTED_LEAVES:
         {
             for (i = 0; i < diff_leaves; ++i)
@@ -375,6 +401,29 @@ double db_index_bulkload(DB_index *index, size_t entries)
                 time += pcm_write(index->pcm, 1);
             }
             break;
+        }
+        case CBTREE_UNSORTED_INNSERS: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
+        {
+            for (i = 0; i < diff_leaves / CBTREE_WAIT_FOR_SPLIT; ++i)
+            {
+                /* write down a key with pointer at the end */
+                time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+
+                /* update bitmap */
+                time += pcm_write(index->pcm, 1);
+            }
+
+            for (j = 0; j < (ssize_t)diff_inners; ++j)
+            {
+                /* we need to move inner */
+                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+
+                /* write down a key with pointer */
+                time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+
+                /* and we need to update bitmap */
+                time += pcm_write(index->pcm, 1);
+            }
         }
         case BTREE_SKIP_COST:
             break;
@@ -402,6 +451,8 @@ double db_index_point_search(DB_index *index, size_t entries)
         switch (index->type)
         {
             case BTREE_NORMAL:
+            case CBTREE:
+            case CBTREE_UNSORTED_INNSERS:
             {
                 /* everything is sorted so scan each level using binary search */
                 for (j = 0; j < (ssize_t)index->height; ++j)

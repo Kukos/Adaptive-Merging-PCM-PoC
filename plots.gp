@@ -64,8 +64,10 @@ set key inside right top
 set key samplen 1
 set key spacing 1
 
-set logscale y
-set logscale y2
+#set logscale y
+#set logscale y2
+set yrange [0:1]
+set y2range [0:3e7]
 set xtics nomirror
 set ytics nomirror
 set y2tics
@@ -94,13 +96,13 @@ set style line 2 lw 1 lc rgb "#9a0f02"
 set style line 3 lw 3 lc rgb "#239fff"
 set style line 4 lw 3 lc rgb "#232bff"
 set style increment user
-set style fill solid border
+set style fill pattern 9 border
 
 set output "ex1_invalidation.pdf"
 set title ""
 set ylabel "Time [s]"
 set y2label "Wear-out [B]" rotate by -90
-plot for [col=2:2] 'ex1_invalidation.txt'  using col:xticlabels(1) ls col-1 title columnheader axis x1y1, for [col=3:3] 'ex1_invalidation.txt' using col:xticlabels(1) ls col-1 title columnheader axis x1y2
+plot for [col=2:2] 'ex1_invalidation.txt'  using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex1_invalidation.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
 
 
 # Rozmiar OX i OY (numerow)
@@ -125,7 +127,7 @@ set output "ex2_index.pdf"
 set title ""
 set ylabel "Time [s]"
 set y2label "Wear-out [B]" rotate by -90
-plot for [col=2:2] 'ex2_BTREE.txt' using col:xticlabels(1) ls col-1 title columnheader axis x1y1, for [col=3:3] 'ex2_BTREE.txt' using col:xticlabels(1) ls col-1 title columnheader axis x1y2
+plot for [col=2:2] 'ex2_BTREE.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex2_BTREE.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
 
 
 # Zmiana na inne histogramy
@@ -174,22 +176,22 @@ set style line 2 lw 1 lc rgb "#9a0f02"
 set style line 3 lw 3 lc rgb "#239fff"
 set style line 4 lw 3 lc rgb "#232bff"
 set style increment user
-set style fill solid border
+set style fill pattern 9 border
 
 set output "ex3_random_total.pdf"
 set title ""
 set ylabel "Time [s]"
 set y2label "Wear-out [B]" rotate by -90
-plot for [col=2:2] 'ex3_random_total.txt' using col:xticlabels(1) ls col-1 title columnheader axis x1y1, for [col=3:3] 'ex3_random_total.txt' using col:xticlabels(1) ls col-1 title columnheader axis x1y2
+plot for [col=2:2] 'ex3_random_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex3_random_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
 
 set output "ex3_newkeys_total.pdf"
 set title ""
 set ylabel "Time [s]"
 set y2label "Wear-out [B]" rotate by -90
-plot for [col=2:2] 'ex3_newkeys_total.txt' using col:xticlabels(1) ls col-1 title columnheader axis x1y1, for [col=3:3] 'ex3_newkeys_total.txt' using col:xticlabels(1) ls col-1 title columnheader axis x1y2
+plot for [col=2:2] 'ex3_newkeys_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex3_newkeys_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
 
 set output "ex3_seq_total.pdf"
 set title ""
 set ylabel "Time [s]"
 set y2label "Wear-out [B]" rotate by -90
-plot for [col=2:2] 'ex3_seq_total.txt' using col:xticlabels(1) ls col-1 title columnheader axis x1y1, for [col=3:3] 'ex3_seq_total.txt' using col:xticlabels(1) ls col-1 title columnheader axis x1y2
+plot for [col=2:2] 'ex3_seq_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex3_seq_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
