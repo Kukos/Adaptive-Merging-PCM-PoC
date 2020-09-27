@@ -63,4 +63,29 @@ void db_pam_destroy(DB_PAM *pam);
 */
 double db_pam_search(DB_PAM *pam, query_t type, size_t entries);
 
+/*
+    Insert entries into PAM Index
+
+    PARAMS
+    @IN pam - pointer to PAM system
+    @IN entries - number fo entries to insert
+
+    RETURN
+    Query time
+*/
+double db_pam_insert(DB_PAM *pam, size_t entries);
+
+
+/*
+    Delete entries from PAM
+
+    PARAMS
+    @IN pam - pointer to PAM system
+    @IN entries - number fo entries to delete
+
+    RETURN
+    Query time
+*/
+double db_pam_delete(DB_PAM* pam, size_t entries);
+
 #endif

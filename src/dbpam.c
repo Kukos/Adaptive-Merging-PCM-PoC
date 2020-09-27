@@ -14,13 +14,12 @@ DB_PAM *db_pam_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entr
     if (pam == NULL)
         ERROR("malloc error\n", NULL);
 
-    pam->am = db_am_create(pcm, num_entries, key_size, entry_size, buffer_size, index_node_size, INVALIDATION_JOURNAL);
+    pam->am = db_am_create(pcm, num_entries, key_size, entry_size, buffer_size, index_node_size, INVALIDATION_JOURNAL, CBTREE_UNSORTED_INNSERS);
     if (pam->am == NULL)
     {
         FREE(pam);
         ERROR("db_am_create error\n", NULL);
     }
-    pam->am->index->type = CBTREE_UNSORTED_INNSERS;
 
     return pam;
 }
@@ -37,4 +36,14 @@ void db_pam_destroy(DB_PAM *pam)
 double db_pam_search(DB_PAM *pam, query_t type, size_t entries)
 {
     return db_am_search(pam->am, type, entries);
+}
+
+double db_pam_insert(DB_PAM *pam, size_t entries)
+{
+    return db_am_insert(pam->am, entries);
+}
+
+double db_pam_delete(DB_PAM* pam, size_t entries)
+{
+    return db_am_delete(pam->am, entries);
 }

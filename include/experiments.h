@@ -90,7 +90,7 @@ void db_pam_experiment_workload(size_t entries);
     RETURN
     This is a void function
 */
-void experiment1(const char * const file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
+void experiment1(const char *file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
 
 /*
     This experiment shows Btree Type impact on whole AM process time and PCM wearout
@@ -106,7 +106,7 @@ void experiment1(const char * const file, size_t key_size, size_t data_size, siz
     RETURN
     This is a void function
 */
-void experiment2(const char * const file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
+void experiment2(const char *file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
 
 /*
     AM vs PAM.
@@ -123,6 +123,18 @@ void experiment2(const char * const file, size_t key_size, size_t data_size, siz
     RETURN
     This is a void function
 */
-void experiment3(const char * const file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
+void experiment3(const char *file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
+
+
+typedef struct StressBatch
+{
+    size_t rsearches;
+    size_t inserts;
+    size_t deletes;
+
+    double selectivity;
+} StressBatch;
+
+void experiment_stress(const char* file, size_t key_size, size_t data_size, size_t entries, StressBatch* batch, size_t batches);
 
 #endif

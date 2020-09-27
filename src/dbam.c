@@ -233,8 +233,16 @@ static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries
     double time;
 
     size_t i;
+    size_t num_partitions = am->num_of_partitions;
 
     TRACE();
+
+    if (entries == 0)
+        return 0.0;
+
+    /* Journal will cutoff some partitions, lets assume for now that will cut a half */
+    if (am->invalidation_type == INVALIDATION_JOURNAL)
+        num_partitions /= 2;
 
     /* seek partitions in logarithmic way */
     for (i = 0; i < am->num_of_partitions; ++i)
@@ -276,11 +284,21 @@ static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries
         case INVALIDATION_JOURNAL:
         {
             /* we need to write down 2x key into journal */
-            time = pcm_write(am->pcm, am->index->key_size * 2);
-            db_stat_update_invalidation_time(time);
-            total_time += time;
+            if (entries > 0)
+            {
+                time = pcm_write(am->pcm, am->index->key_size * 2);
+                db_stat_update_invalidation_time(time);
+                total_time += time;
+            }
 
             break;
+        }
+        case INVALIDATION_OVERWRITE:
+        {
+            /* we need a move in avg half of partition, in avg we will load 1/2 partitions or 1/4 paritions */
+            time = pcm_write(am->pcm, (am->num_entries_in_partitions * am->entry_size) / 8);
+            db_stat_update_invalidation_time(time);
+            total_time += time;
         }
         case INVALIDATION_SKIP:
             break;
@@ -293,7 +311,7 @@ static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries
     return time;
 }
 
-DB_AM *db_am_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_size, size_t buffer_size, size_t index_node_size, invalidation_type_t invalidation_type)
+DB_AM *db_am_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_size, size_t buffer_size, size_t index_node_size, invalidation_type_t invalidation_type, btree_type_t index_type)
 {
     DB_AM *am;
 
@@ -311,9 +329,17 @@ DB_AM *db_am_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_
     am->num_entries_in_partitions = 0;
     am->num_of_partitions = 0;
 
-    am->index = db_index_create(pcm, key_size, entry_size, index_node_size, 0.8, BTREE_NORMAL);
+    am->index = db_index_create(pcm, key_size, entry_size, index_node_size, 0.8, index_type);
     if (am->index == NULL)
     {
+        FREE(am);
+        ERROR("db_index_create error\n", NULL);
+    }
+
+    am->deletion_index = db_index_create(pcm, key_size, entry_size, index_node_size, 0.8, index_type);
+    if (am->deletion_index == NULL)
+    {
+        db_index_destroy(am->index);
         FREE(am);
         ERROR("db_index_create error\n", NULL);
     }
@@ -329,6 +355,7 @@ void db_am_destroy(DB_AM *am)
         return;
 
     db_index_destroy(am->index);
+    db_index_destroy(am->deletion_index);
 
     FREE(am);
 }
@@ -361,6 +388,60 @@ double db_am_search(DB_AM *am, query_t type, size_t entries)
 
     if (am->num_entries_in_partitions * am->entry_size <= am->sort_buffer_size)
         time += db_am_write_all_to_index(am);
+
+    return time;
+}
+
+double db_am_insert(DB_AM *am, size_t entries)
+{
+    return db_index_insert(am->index, entries);
+}
+
+/* Old way */
+// double db_am_delete(DB_AM* am, size_t entries)
+// {
+//     double time = 0.0;
+//     size_t entries_from_index;
+//     size_t entries_from_partition;
+
+//     TRACE();
+
+//     entries_from_index = get_num_entries_from_index(am, QUERY_RANDOM, entries);
+//     entries_from_partition = entries - entries_from_index;
+
+//     /* delete from index */
+//     time += db_index_delete(am->index, entries_from_index);
+
+//     /* delete from partition */
+//     time += load_entries_from_partition(am, entries_from_partition);
+
+//     return time;
+// }
+
+/* To be fair lets implement 2x BTree 1 with deletion and 1 with insertion */
+double db_am_delete(DB_AM* am, size_t entries)
+{
+    double time = 0.0;
+    size_t entries_from_index;
+    size_t entries_from_partition;
+
+    TRACE();
+
+    entries_from_index = get_num_entries_from_index(am, QUERY_RANDOM, entries);
+    entries_from_partition = entries - entries_from_index;
+
+    /* delete from index */
+    time += db_index_delete(am->index, entries_from_index);
+
+    /* delete from partition = insert to deletion Tree when we have normal AM */
+    if (am->index->type == BTREE_NORMAL)
+    {
+        time += pcm_read(am->pcm, entries_from_partition * am->entry_size);
+        time += db_index_insert(am->deletion_index, entries_from_partition);
+        am->num_entries_in_partitions -= entries_from_partition;
+    }
+    else
+        time += load_entries_from_partition(am, entries_from_partition);
 
     return time;
 }

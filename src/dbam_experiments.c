@@ -18,7 +18,7 @@ void db_am_experiment_workload(size_t entries)
     sgenrand((unsigned long)time(NULL));
 
     pcm = pcm_create_default_model();
-    am = db_am_create(pcm, entries, sizeof(int), 140, (size_t)(0.01 * (double)entries * 140), 10 * 140, INVALIDATION_FLAG);
+    am = db_am_create(pcm, entries, sizeof(int), 140, (size_t)(0.01 * (double)entries * 140), 10 * 140, INVALIDATION_OVERWRITE, BTREE_NORMAL);
     db_stat_reset();
 
     db_stat_start_query();

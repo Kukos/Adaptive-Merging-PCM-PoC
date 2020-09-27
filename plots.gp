@@ -8,15 +8,16 @@ set style line 1 lw 10 lc rgb "green"
 set style line 2 lw 5 dt 7 lc rgb "blue"
 set style line 3 lw 3 lc rgb "red"
 set style line 4 lw 3 lc rgb "gold"
+set style line 5 lw 3 lc rgb "#660033"
 set style increment user
 
-set key maxrows 2
+set key top right Right maxrows 3
 
 # Rozmiar OX i OY (numerow)
 set tics font ", 26"
 
 # Fonty legendy
-set key font "Helvetica, 32"
+set key font "Helvetica, 24"
 
 # Fonty tytulu czyli tego nad obrazkiem
 set title font "Helvetica, 24"
@@ -33,23 +34,74 @@ set output "ex3_random_per_query.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "QUERY"
-plot for [col=2:5] 'ex3_random_per_query.txt' using 1:col with lines title columnheader
-
+plot for [col=2:6] 'ex3_random_per_query.txt' using 1:col with lines title columnheader
 
 set xtics 4
 set output "ex3_seq_per_query.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "QUERY"
-plot for [col=2:5] 'ex3_seq_per_query.txt' using 1:col with lines title columnheader
+plot for [col=2:6] 'ex3_seq_per_query.txt' using 1:col with lines title columnheader
 
-set key ins bottom center
-set xtics 10
+#set key ins bottom center
+set xtics 5
 set output "ex3_newkeys_per_query.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "QUERY"
-plot for [col=2:5] 'ex3_newkeys_per_query.txt' using 1:col with lines title columnheader
+plot for [col=2:6] 'ex3_newkeys_per_query.txt' using 1:col with lines title columnheader
+
+
+# reset
+# set terminal pdfcairo enhanced
+# set datafile separator "\t"
+# set termoption font ',16'
+
+# set style line 1 lw 3 lc rgb "red"
+# set style line 2 lw 3 lc rgb "gold"
+# set style line 3 lw 3 lc rgb "#660033"
+# set style increment user
+
+# set key top right Right maxrows 3
+
+# # Rozmiar OX i OY (numerow)
+# set tics font ", 26"
+
+# # Fonty legendy
+# set key font "Helvetica, 24"
+
+# # Fonty tytulu czyli tego nad obrazkiem
+# set title font "Helvetica, 24"
+
+# # Fonty osi OY
+# set ylabel font "Helvetica, 32"
+
+# # Fonty osi OX
+# set xlabel font "Helvetica, 32"
+
+# set output "ex4_stress1_per_batch.pdf"
+# set title ""
+# set ylabel "TIME [s]"
+# set xlabel "QUERY"
+# plot for [col=2:4] 'ex4_stress1_per_batch.txt' using 1:col with lines title columnheader
+
+# set output "ex4_stress2_per_batch.pdf"
+# set title ""
+# set ylabel "TIME [s]"
+# set xlabel "QUERY"
+# plot for [col=2:4] 'ex4_stress2_per_batch.txt' using 1:col with lines title columnheader
+
+# set output "ex4_stress3_per_batch.pdf"
+# set title ""
+# set ylabel "TIME [s]"
+# set xlabel "QUERY"
+# plot for [col=2:4] 'ex4_stress3_per_batch.txt' using 1:col with lines title columnheader
+
+# set output "ex4_stress4_per_batch.pdf"
+# set title ""
+# set ylabel "TIME [s]"
+# set xlabel "QUERY"
+# plot for [col=2:4] 'ex4_stress4_per_batch.txt' using 1:col with lines title columnheader
 
 # Zmiana na histogram
 reset
@@ -149,7 +201,7 @@ set y2tics
 
 #set ytics 50
 #set y2tics 4e9
-set yrange [0:50]
+set yrange [0:70]
 set y2range [0:4e9]
 
 # Rozmiar OX i OY (numerow)
@@ -195,3 +247,35 @@ set title ""
 set ylabel "Time [s]"
 set y2label "Wear-out [B]" rotate by -90
 plot for [col=2:2] 'ex3_seq_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex3_seq_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
+
+
+# Batch total
+
+set yrange [0:350]
+set y2range [0:1.5e10]
+set output "ex4_stress1_total.pdf"
+set title ""
+set ylabel "Time [s]"
+set y2label "Wear-out [B]" rotate by -90
+plot for [col=2:2] 'ex4_stress1_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex4_stress1_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
+
+
+set output "ex4_stress2_total.pdf"
+set title ""
+set ylabel "Time [s]"
+set y2label "Wear-out [B]" rotate by -90
+plot for [col=2:2] 'ex4_stress2_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex4_stress2_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
+
+set output "ex4_stress3_total.pdf"
+set title ""
+set ylabel "Time [s]"
+set y2label "Wear-out [B]" rotate by -90
+plot for [col=2:2] 'ex4_stress3_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex4_stress3_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
+
+set yrange [0:50]
+set y2range [0:3e9]
+set output "ex4_stress4_total.pdf"
+set title ""
+set ylabel "Time [s]"
+set y2label "Wear-out [B]" rotate by -90
+plot for [col=2:2] 'ex4_stress4_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex4_stress4_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2

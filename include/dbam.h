@@ -32,6 +32,7 @@ typedef struct DB_AM
     size_t num_entries_in_partitions;
 
     DB_index *index;
+    DB_index *deletion_index;
     PCM *pcm;
 
     invalidation_type_t invalidation_type;
@@ -47,11 +48,13 @@ typedef struct DB_AM
     @IN entry_size - size of entry in Bytes
     @IN buffer_size - buffer size (size in bytes)
     @IN index_node_size - size of B+TreeNode in Bytes
+    @IN invalidation_type - algorithm to invalidate entries during moving from partition to index
+    @IN indeX_type - B+Tree type
 
     RETURN
     Pointer to new raw Table
 */
-DB_AM *db_am_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_size, size_t buffer_size, size_t index_node_size, invalidation_type_t invalidation_type);
+DB_AM *db_am_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_size, size_t buffer_size, size_t index_node_size, invalidation_type_t invalidation_type, btree_type_t index_type);
 
 /*
     Destroy AM system
@@ -76,5 +79,29 @@ void db_am_destroy(DB_AM *am);
     Query time
 */
 double db_am_search(DB_AM *am, query_t type, size_t entries);
+
+/*
+    Insert entries into AM Index
+
+    PARAMS
+    @IN am - pointer to AM system
+    @IN entries - number fo entries to insert
+
+    RETURN
+    Query time
+*/
+double db_am_insert(DB_AM *am, size_t entries);
+
+/*
+    Delete entries from AM
+
+    PARAMS
+    @IN am - pointer to AM system
+    @IN entries - number fo entries to delete
+
+    RETURN
+    Query time
+*/
+double db_am_delete(DB_AM* am, size_t entries);
 
 #endif
