@@ -132,9 +132,14 @@ typedef struct StressBatch
     size_t inserts;
     size_t deletes;
 
-    double selectivity;
+    double selectivity_min; /* when step == 0 use min */
+    double selectivity_max;
+    double selectivity_step;
 } StressBatch;
 
 void experiment_stress(const char* file, size_t key_size, size_t data_size, size_t entries, StressBatch* batch, size_t batches);
+
+void experiment_stress_step(const char* file, size_t key_size, size_t data_size, size_t entries, StressBatch* batch, size_t batches);
+
 
 #endif

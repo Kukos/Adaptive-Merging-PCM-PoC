@@ -32,8 +32,8 @@ int main(void)
 
     const double selectivity = 0.05;
 
-    // experiment1("ex1", table.key_size, table.data_size, table.entries, QUERY_RANDOM, selectivity);
-    // experiment2("ex2", table.key_size, table.data_size, table.entries, QUERY_RANDOM, selectivity);
+    experiment1("ex1", table.key_size, table.data_size, table.entries, QUERY_RANDOM, selectivity);
+    experiment2("ex2", table.key_size, table.data_size, table.entries, QUERY_RANDOM, selectivity);
     experiment3("ex3_random", table.key_size, table.data_size, table.entries, QUERY_RANDOM, selectivity);
     experiment3("ex3_newkeys", table.key_size, table.data_size, table.entries, QUERY_ALWAYS_NEW, selectivity);
     experiment3("ex3_seq", table.key_size, table.data_size, table.entries, QUERY_SEQUENTIAL_PATTERN, selectivity);
@@ -42,29 +42,57 @@ int main(void)
                       table.key_size,
                       table.data_size,
                       table.entries,
-                      &(StressBatch){.inserts = 500, .deletes = 500, .rsearches = 1000, .selectivity = 0.01},
+                      &(StressBatch){.inserts = 500, .deletes = 500, .rsearches = 1000, .selectivity_min = 0.01},
                       20);
 
     experiment_stress("ex4_stress2",
                       table.key_size,
                       table.data_size,
                       table.entries,
-                      &(StressBatch){.inserts = 5, .deletes = 5, .rsearches = 10, .selectivity = 0.01},
+                      &(StressBatch){.inserts = 5, .deletes = 5, .rsearches = 10, .selectivity_min = 0.01},
                       100);
 
     experiment_stress("ex4_stress3",
                       table.key_size,
                       table.data_size,
                       table.entries,
-                      &(StressBatch){.inserts = 10, .deletes = 10, .rsearches = 80, .selectivity = 0.01},
+                      &(StressBatch){.inserts = 10, .deletes = 10, .rsearches = 80, .selectivity_min = 0.01},
                       40);
 
     experiment_stress("ex4_stress4",
                       table.key_size,
                       table.data_size,
                       table.entries,
-                      &(StressBatch){.inserts = 100000, .deletes = 100000, .rsearches = 5, .selectivity = 0.01},
+                      &(StressBatch){.inserts = 100000, .deletes = 100000, .rsearches = 5, .selectivity_min = 0.01},
                       5);
+
+    experiment_stress_step("ex4_stress_step1",
+                           table.key_size,
+                           table.data_size,
+                           table.entries,
+                           &(StressBatch){.inserts = 500, .deletes = 500, .rsearches = 1000, .selectivity_min = 0.01, .selectivity_max = 0.05, .selectivity_step = 0.002},
+                           20);
+
+    experiment_stress_step("ex4_stress_step2",
+                           table.key_size,
+                           table.data_size,
+                           table.entries,
+                           &(StressBatch){.inserts = 5, .deletes = 5, .rsearches = 10, .selectivity_min = 0.01, .selectivity_max = 0.05, .selectivity_step = 0.002},
+                           100);
+
+    experiment_stress_step("ex4_stress_step3",
+                           table.key_size,
+                           table.data_size,
+                           table.entries,
+                           &(StressBatch){.inserts = 10, .deletes = 10, .rsearches = 80, .selectivity_min = 0.01, .selectivity_max = 0.05, .selectivity_step = 0.002},
+                           40);
+
+    experiment_stress_step("ex4_stress_step4",
+                           table.key_size,
+                           table.data_size,
+                           table.entries,
+                           &(StressBatch){.inserts = 100000, .deletes = 100000, .rsearches = 5, .selectivity_min = 0.01, .selectivity_max = 0.05, .selectivity_step = 0.002},
+                           5);
 
     return 0;
 }

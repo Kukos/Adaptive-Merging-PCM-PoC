@@ -279,3 +279,85 @@ set title ""
 set ylabel "Time [s]"
 set y2label "Wear-out [B]" rotate by -90
 plot for [col=2:2] 'ex4_stress4_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex4_stress4_total.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
+
+# Batch Total Normalize
+set yrange [0:10]
+set y2range [0:20]
+set ytics 1
+set y2tics 2
+set output "ex4_stress1_total_norma.pdf"
+set title ""
+set ylabel "Time [s]"
+set y2label "Wear-out [B]" rotate by -90
+plot for [col=2:2] 'ex4_stress1_total_norma.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex4_stress1_total_norma.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
+
+
+set output "ex4_stress2_total_norma.pdf"
+set title ""
+set ylabel "Time [s]"
+set y2label "Wear-out [B]" rotate by -90
+plot for [col=2:2] 'ex4_stress2_total_norma.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex4_stress2_total_norma.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
+
+set output "ex4_stress3_total_norma.pdf"
+set title ""
+set ylabel "Time [s]"
+set y2label "Wear-out [B]" rotate by -90
+plot for [col=2:2] 'ex4_stress3_total_norma.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex4_stress3_total_norma.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
+
+set output "ex4_stress4_total_norma.pdf"
+set title ""
+set ylabel "Time [s]"
+set y2label "Wear-out [B]" rotate by -90
+plot for [col=2:2] 'ex4_stress4_total_norma.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y1, for [col=3:3] 'ex4_stress4_total_norma.txt' using col:xticlabels(1) lt -1 title columnheader axis x1y2
+
+reset
+set terminal pdfcairo enhanced
+set datafile separator "\t"
+set termoption font ',16'
+
+set style line 1 lw 3 lc rgb "red"
+set style line 2 lw 3 lc rgb "gold"
+set style line 3 lw 3 lc rgb "#660033"
+set style increment user
+
+set key top right Right maxrows 3
+
+# Rozmiar OX i OY (numerow)
+set tics font ", 24"
+set xtics 0.01
+
+# Fonty legendy
+set key font "Helvetica, 24"
+
+# Fonty tytulu czyli tego nad obrazkiem
+set title font "Helvetica, 24"
+
+# Fonty osi OY
+set ylabel font "Helvetica, 32"
+
+# Fonty osi OX
+set xlabel font "Helvetica, 32"
+
+set output "ex4_stress_step1_total_norma.pdf"
+set title ""
+set ylabel "TIME [s]"
+set xlabel "SELECTIVITY"
+plot for [col=2:4] 'ex4_stress_step1_total_norma.txt' using 1:col with lines title columnheader
+
+set output "ex4_stress_step2_total_norma.pdf"
+set title ""
+set ylabel "TIME [s]"
+set xlabel "SELECTIVITY"
+plot for [col=2:4] 'ex4_stress_step2_total_norma.txt' using 1:col with lines title columnheader
+
+set output "ex4_stress_step3_total_norma.pdf"
+set title ""
+set ylabel "TIME [s]"
+set xlabel "SELECTIVITY"
+plot for [col=2:4] 'ex4_stress_step3_total_norma.txt' using 1:col with lines title columnheader
+
+set output "ex4_stress_step4_total_norma.pdf"
+set title ""
+set ylabel "TIME [s]"
+set xlabel "SELECTIVITY"
+plot for [col=2:4] 'ex4_stress_step4_total_norma.txt' using 1:col with lines title columnheader

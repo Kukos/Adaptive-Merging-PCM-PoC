@@ -143,7 +143,7 @@ void experiment3(const char * const file, size_t key_size, size_t data_size, siz
     char query_file_name[1024];
     char total_file_name[1024];
 
-    const size_t node_size = 256;
+    const size_t node_size = 512;
     const double node_factor = 0.8;
     const size_t buffer_size = (size_t)(0.01 * (double)entries * (double)data_size);
 
@@ -267,7 +267,7 @@ void experiment_stress(const char* file, size_t key_size, size_t data_size, size
     char total_file_name[1024];
     char query_file_name[1024];
 
-    const size_t node_size = 256;
+    const size_t node_size = 512;
     const size_t buffer_size = (size_t)(0.01 * (double)entries * (double)data_size);
 
     TRACE();
@@ -300,7 +300,7 @@ void experiment_stress(const char* file, size_t key_size, size_t data_size, size
         /* PAM BATCH */
         db_stat_start_query();
         for (size_t q = 0; q < batch->rsearches; ++q)
-            db_pam_search(pam, QUERY_RANDOM, (size_t)((double)entries * batch->selectivity));
+            db_pam_search(pam, QUERY_RANDOM, (size_t)((double)entries * batch->selectivity_min));
 
         for (size_t q = 0; q < batch->inserts; ++q)
             db_pam_insert(pam, 1);
@@ -315,7 +315,7 @@ void experiment_stress(const char* file, size_t key_size, size_t data_size, size
         /* AM BATCH */
         db_stat_start_query();
         for (size_t q = 0; q < batch->rsearches; ++q)
-            db_am_search(am, QUERY_RANDOM, (size_t)((double)entries * batch->selectivity));
+            db_am_search(am, QUERY_RANDOM, (size_t)((double)entries * batch->selectivity_min));
 
         for (size_t q = 0; q < batch->inserts; ++q)
             db_am_insert(am, 1);
@@ -330,7 +330,7 @@ void experiment_stress(const char* file, size_t key_size, size_t data_size, size
         /* eAM BATCH */
         db_stat_start_query();
         for (size_t q = 0; q < batch->rsearches; ++q)
-            db_am_search(eam, QUERY_RANDOM, (size_t)((double)entries * batch->selectivity));
+            db_am_search(eam, QUERY_RANDOM, (size_t)((double)entries * batch->selectivity_min));
 
         for (size_t q = 0; q < batch->inserts; ++q)
             db_am_insert(eam, 1);
@@ -359,7 +359,143 @@ void experiment_stress(const char* file, size_t key_size, size_t data_size, size
     dprintf(fd, "PAM\t%lf\t%zu\n", total_pam_time, pcm_pam->wearout);
     close(fd);
 
+    /* Normalize time and wearout to PAM */
+    snprintf(total_file_name, sizeof(total_file_name), "%s_total_norma.txt", file);
+    fd = open(total_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
+    dprintf(fd, "Type\tTime\tPCM Wear-out\n");
+    dprintf(fd, "AM\t%Lf\t%Lf\n", (long double)total_am_time / (long double)total_pam_time, (long double)pcm_am->wearout / (long double)pcm_pam->wearout);
+    dprintf(fd, "eAM\t%Lf\t%Lf\n", (long double)total_eam_time / (long double)total_pam_time, (long double)pcm_eam->wearout / (long double)pcm_pam->wearout);
+    dprintf(fd, "PAM\t%Lf\t%Lf\n", (long double)total_pam_time / (long double)total_pam_time, (long double)pcm_pam->wearout / (long double)pcm_pam->wearout);
+    close(fd);
+
     pcm_destroy(pcm_am);
     pcm_destroy(pcm_eam);
     pcm_destroy(pcm_pam);
+}
+
+
+void experiment_stress_step(const char* file, size_t key_size, size_t data_size, size_t entries, StressBatch* batch, size_t batches)
+{
+    char total_file_name[1024];
+    char total_norma_file_name[1024];
+    int fd_total;
+    int fd_norma;
+
+    snprintf(total_file_name, sizeof(total_file_name), "%s_total.txt", file);
+    fd_total = open(total_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
+    dprintf(fd_total, "Selectivity\tPAM\tAM\teAM\n");
+
+    snprintf(total_norma_file_name, sizeof(total_norma_file_name), "%s_total_norma.txt", file);
+    fd_norma = open(total_norma_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
+    dprintf(fd_norma, "Selectivity\tPAM\tAM\teAM\n");
+
+    for (double sel = batch->selectivity_min; sel <= batch->selectivity_max + 0.001; sel += batch->selectivity_step)
+    {
+        PCM *pcm_am;
+        PCM *pcm_eam;
+        PCM *pcm_pam;
+
+        DB_PAM *pam;
+        DB_AM *am;
+        DB_AM *eam;
+
+        double pam_time;
+        double am_time;
+        double eam_time;
+
+        double total_am_time = 0.0;
+        double total_eam_time = 0.0;
+        double total_pam_time = 0.0;
+
+        const size_t node_size = 512;
+        const size_t buffer_size = (size_t)(0.01 * (double)entries * (double)data_size);
+
+        TRACE();
+
+        pcm_am = pcm_create_default_model();
+        pcm_eam = pcm_create_default_model();
+        pcm_pam = pcm_create_default_model();
+
+        am = db_am_create(pcm_am, entries, key_size, data_size, buffer_size, node_size, INVALIDATION_OVERWRITE, BTREE_NORMAL);
+        eam = db_am_create(pcm_eam, entries, key_size, data_size, buffer_size, node_size, INVALIDATION_BITMAP, BTREE_UNSORTED_LEAVES);
+        pam = db_pam_create(pcm_pam, entries, key_size, data_size, buffer_size, node_size);
+
+        db_pam_search(pam, QUERY_RANDOM, 1);
+        db_am_search(am, QUERY_RANDOM, 1);
+        db_am_search(eam, QUERY_RANDOM, 1);
+
+        /* Lets skip cost of init */
+        pcm_am->wearout = 0;
+        pcm_eam->wearout = 0;
+        pcm_pam->wearout = 0;
+        db_stat_reset();
+
+        for (size_t i = 0; i < batches; ++i)
+        {
+            printf("%s: SEL: %.4lf/%.4lf: BATCH %zu/%zu\n", file, sel, batch->selectivity_max,  (i + 1), batches);
+
+            /* PAM BATCH */
+            db_stat_start_query();
+            for (size_t q = 0; q < batch->rsearches; ++q)
+                db_pam_search(pam, QUERY_RANDOM, (size_t)((double)entries * sel));
+
+            for (size_t q = 0; q < batch->inserts; ++q)
+                db_pam_insert(pam, 1);
+
+            for (size_t q = 0; q < batch->deletes; ++q)
+                db_pam_delete(pam, 1);
+
+            db_stat_finish_query();
+            pam_time = db_stat_get_current_time();
+            total_pam_time += pam_time;
+
+            /* AM BATCH */
+            db_stat_start_query();
+            for (size_t q = 0; q < batch->rsearches; ++q)
+                db_am_search(am, QUERY_RANDOM, (size_t)((double)entries * sel));
+
+            for (size_t q = 0; q < batch->inserts; ++q)
+                db_am_insert(am, 1);
+
+            for (size_t q = 0; q < batch->deletes; ++q)
+                db_am_delete(am, 1);
+
+            db_stat_finish_query();
+            am_time = db_stat_get_current_time();
+            total_am_time += am_time;
+
+            /* eAM BATCH */
+            db_stat_start_query();
+            for (size_t q = 0; q < batch->rsearches; ++q)
+                db_am_search(eam, QUERY_RANDOM, (size_t)((double)entries * sel));
+
+            for (size_t q = 0; q < batch->inserts; ++q)
+                db_am_insert(eam, 1);
+
+            for (size_t q = 0; q < batch->deletes; ++q)
+                db_am_delete(eam, 1);
+
+            db_stat_finish_query();
+            eam_time = db_stat_get_current_time();
+            total_eam_time += eam_time;
+        }
+
+        // db_stat_summary_print();
+
+        db_pam_destroy(pam);
+        db_am_destroy(am);
+        db_am_destroy(eam);
+
+        dprintf(fd_total, "%.4lf\t%lf\t%lf\t%lf\n", sel, total_pam_time, total_am_time, total_eam_time);
+
+        /* Normalize time to PAM */
+        dprintf(fd_norma, "%.4lf\t%Lf\t%Lf\t%Lf\n", sel, (long double)total_pam_time / (long double)total_pam_time, (long double)total_am_time / (long double)total_pam_time, (long double)total_eam_time / (long double)total_pam_time);
+
+        pcm_destroy(pcm_am);
+        pcm_destroy(pcm_eam);
+        pcm_destroy(pcm_pam);
+    }
+
+    close(fd_total);
+    close(fd_norma);
 }
