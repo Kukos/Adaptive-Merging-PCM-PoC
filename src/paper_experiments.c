@@ -73,8 +73,8 @@ void experiment2(const char * const file, size_t key_size, size_t data_size, siz
     int fd;
     char file_name[1024];
 
-    const btree_type_t btree_type[] = {BTREE_NORMAL, BTREE_UNSORTED_LEAVES, BTREE_UNSORTED_INNERS_UNSORTED_LEAVES, CBTREE, CBTREE_UNSORTED_INNSERS};
-    const char * const btree_names[] = {"B+Tree", "Uns leaves", "Uns nodes",  "CBTree", "CBTree-unsorted-inners"};
+    const btree_type_t btree_type[] = {BTREE_NORMAL, CBTREE, CBTREE_UNSORTED_INNSERS};
+    const char * const btree_names[] = {"B+-tree", "CB-tree", "OCB-tree"};
 
     TRACE();
 
@@ -376,18 +376,30 @@ void experiment_stress(const char* file, size_t key_size, size_t data_size, size
 
 void experiment_stress_step(const char* file, size_t key_size, size_t data_size, size_t entries, StressBatch* batch, size_t batches)
 {
-    char total_file_name[1024];
-    char total_norma_file_name[1024];
-    int fd_total;
-    int fd_norma;
+    char time_total_file_name[1024];
+    char time_total_norma_file_name[1024];
+    char mem_total_file_name[1024];
+    char mem_total_norma_file_name[1024];
+    int time_fd_total;
+    int time_fd_norma;
+    int mem_fd_total;
+    int mem_fd_norma;
 
-    snprintf(total_file_name, sizeof(total_file_name), "%s_total.txt", file);
-    fd_total = open(total_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
-    dprintf(fd_total, "Selectivity\tPAM\tAM\teAM\n");
+    snprintf(time_total_file_name, sizeof(time_total_file_name), "%s_time_total.txt", file);
+    time_fd_total = open(time_total_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
+    dprintf(time_fd_total, "Selectivity\tPAM\tAM\teAM\n");
 
-    snprintf(total_norma_file_name, sizeof(total_norma_file_name), "%s_total_norma.txt", file);
-    fd_norma = open(total_norma_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
-    dprintf(fd_norma, "Selectivity\tPAM\tAM\teAM\n");
+    snprintf(time_total_norma_file_name, sizeof(time_total_norma_file_name), "%s_time_total_norma.txt", file);
+    time_fd_norma = open(time_total_norma_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
+    dprintf(time_fd_norma, "Selectivity\tPAM\tAM\teAM\n");
+
+    snprintf(mem_total_file_name, sizeof(mem_total_file_name), "%s_wearout_total.txt", file);
+    mem_fd_total = open(mem_total_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
+    dprintf(mem_fd_total, "Wearout\tPAM\tAM\teAM\n");
+
+    snprintf(mem_total_norma_file_name, sizeof(mem_total_norma_file_name), "%s_wearout_total_norma.txt", file);
+    mem_fd_norma = open(mem_total_norma_file_name, O_CREAT | O_TRUNC | O_RDWR | O_APPEND, 0644);
+    dprintf(mem_fd_norma, "Wearout\tPAM\tAM\teAM\n");
 
     for (double sel = batch->selectivity_min; sel <= batch->selectivity_max + 0.001; sel += batch->selectivity_step)
     {
@@ -486,16 +498,19 @@ void experiment_stress_step(const char* file, size_t key_size, size_t data_size,
         db_am_destroy(am);
         db_am_destroy(eam);
 
-        dprintf(fd_total, "%.4lf\t%lf\t%lf\t%lf\n", sel, total_pam_time, total_am_time, total_eam_time);
+        dprintf(time_fd_total, "%.4lf\t%lf\t%lf\t%lf\n", sel, total_pam_time, total_am_time, total_eam_time);
+        dprintf(time_fd_norma, "%.4lf\t%Lf\t%Lf\t%Lf\n", sel, (long double)total_pam_time / (long double)total_pam_time, (long double)total_am_time / (long double)total_pam_time, (long double)total_eam_time / (long double)total_pam_time);
 
-        /* Normalize time to PAM */
-        dprintf(fd_norma, "%.4lf\t%Lf\t%Lf\t%Lf\n", sel, (long double)total_pam_time / (long double)total_pam_time, (long double)total_am_time / (long double)total_pam_time, (long double)total_eam_time / (long double)total_pam_time);
+        dprintf(mem_fd_total, "%.4lf\t%zu\t%zu\t%zu\n", sel, pcm_pam->wearout, pcm_am->wearout, pcm_eam->wearout);
+        dprintf(mem_fd_norma, "%.4lf\t%Lf\t%Lf\t%Lf\n", sel, (long double)pcm_pam->wearout / (long double)pcm_pam->wearout, (long double)pcm_am->wearout / (long double)pcm_pam->wearout, (long double)pcm_eam->wearout / (long double)pcm_pam->wearout);
 
         pcm_destroy(pcm_am);
         pcm_destroy(pcm_eam);
         pcm_destroy(pcm_pam);
     }
 
-    close(fd_total);
-    close(fd_norma);
+    close(time_fd_total);
+    close(time_fd_norma);
+    close(mem_fd_total);
+    close(mem_fd_norma);
 }

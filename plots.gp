@@ -175,6 +175,8 @@ set y2label font "Helvetica, 32"
 # Fonty osi OX
 set xlabel font "Helvetica, 22"
 
+set yrange [0:30]
+set y2range [0:2e9]
 set output "ex2_index.pdf"
 set title ""
 set ylabel "Time [s]"
@@ -338,26 +340,26 @@ set ylabel font "Helvetica, 32"
 # Fonty osi OX
 set xlabel font "Helvetica, 32"
 
-set output "ex4_stress_step1_total_norma.pdf"
+set output "ex4_stress_step1_time_total_norma.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "SELECTIVITY"
-plot for [col=2:4] 'ex4_stress_step1_total_norma.txt' using 1:col with lines title columnheader
+plot for [col=2:4] 'ex4_stress_step1_time_total_norma.txt' using 1:col with lines title columnheader
 
-set output "ex4_stress_step2_total_norma.pdf"
+set output "ex4_stress_step2_time_total_norma.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "SELECTIVITY"
-plot for [col=2:4] 'ex4_stress_step2_total_norma.txt' using 1:col with lines title columnheader
+plot for [col=2:4] 'ex4_stress_step2_time_total_norma.txt' using 1:col with lines title columnheader
 
-set output "ex4_stress_step3_total_norma.pdf"
+set output "ex4_stress_step3_time_total_norma.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "SELECTIVITY"
-plot for [col=2:4] 'ex4_stress_step3_total_norma.txt' using 1:col with lines title columnheader
+plot for [col=2:4] 'ex4_stress_step3_time_total_norma.txt' using 1:col with lines title columnheader
 
-set output "ex4_stress_step4_total_norma.pdf"
+set output "ex4_stress_step4_time_total_norma.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "SELECTIVITY"
-plot for [col=2:4] 'ex4_stress_step4_total_norma.txt' using 1:col with lines title columnheader
+plot for [col=2:4] 'ex4_stress_step4_time_total_norma.txt' using 1:col with lines title columnheader
