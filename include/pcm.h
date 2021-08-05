@@ -91,7 +91,8 @@ static ___inline___ double pcm_write(PCM *pcm, size_t bytes);
 static ___inline___ double pcm_write(PCM *pcm, size_t bytes)
 {
     pcm->wearout += bytes;
-    return ((double)bytes * pcm->write_time / (double)pcm->mem_line) + pcm_read(pcm, bytes);
+    const size_t lines = INT_CEIL_DIV(bytes, pcm->mem_line);
+    return (double)lines * pcm->write_time + pcm_read(pcm, bytes);
 }
 
 

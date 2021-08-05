@@ -17,6 +17,7 @@
 #include <dbutils.h>
 #include <partitions.h>
 #include <dbam.h>
+#include <dbindex.h>
 
 typedef struct DB_PAM
 {
@@ -33,11 +34,12 @@ typedef struct DB_PAM
     @IN entry_size - size of entry in Bytes
     @IN buffer_size - buffer size (size in bytes)
     @IN index_node_size - size of B+TreeNode in Bytes
+    @IN index_type - B+ index type
 
     RETURN
     Pointer to new raw Table
 */
-DB_PAM *db_pam_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_size, size_t buffer_size, size_t index_node_size);
+DB_PAM *db_pam_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_size, size_t buffer_size, size_t index_node_size, btree_type_t index_type);
 
 /*
     Destroy PAM system

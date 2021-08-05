@@ -26,14 +26,24 @@
 
 typedef enum
 {
-    BTREE_NORMAL,
-    BTREE_UNSORTED_LEAVES,
-    BTREE_UNSORTED_INNERS_UNSORTED_LEAVES,
-    CBTREE,
-    CBTREE_UNSORTED_INNSERS,
+    BTREE_NORMAL, /* normal B+ like in RAM */
+    BTREE_UNSORTED_LEAVES, /* B+ with unsorted leaves only */
+    BTREE_UNSORTED_INNERS_UNSORTED_LEAVES, /* every node is unsorted */
+    CBTREE, /* OverFlow node is added to each leaf to postpone split. But leaves are still sorted */
+    OCBTREE, /* CBTree + OverFlow node also on the last level of inners */
+    BTREE_2SECTION_NODE, /* 2sections, [SORTED|UNSORTED] to keep good insertion and good deletion */
     BTREE_SKIP_COST,
+    /* buffered versions so inners are in RAM */
+    BTREE_NORMAL_INNERS_RAM,
+    BTREE_UNSORTED_LEAVES_INNERS_RAM,
+    CBTREE_INNERS_RAM,
+    BTREE_2SECTION_NODE_INNERS_RAM,
+    BTREE_WITH_BUFFERED_TREE, /* B+Tree 2sectionNode + full buffered tree in RAM */
 } btree_type_t;
 
+#define CBTREE_OPERATION_BUFFER_SIZE         10
+#define OCBTREE_OPERATION_BUFFER_SIZE        10
+#define BTREE_WITH_BUFFERED_TREE_BUFFER_SIZE 1000
 typedef struct DB_index
 {
     size_t num_entries;
@@ -45,6 +55,8 @@ typedef struct DB_index
     double node_factor;
 
     btree_type_t type;
+
+    size_t buffered_operation; /* used in CBTree and OCBTree */
 
     PCM *pcm;
 } DB_index;

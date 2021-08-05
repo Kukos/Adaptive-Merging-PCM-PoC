@@ -68,7 +68,7 @@ static ___inline___ double load_entries_from_index(DB_AM *am, size_t entries);
     RETURN
     Time consumed by loading from partitions
 */
-static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries);
+static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries, bool to_delete);
 
 /*
     Init Adaptive Merging System (Call it only once at first query)
@@ -227,17 +227,17 @@ static double create_partitions_for_entries(DB_AM *am, size_t entries)
     return time;
 }
 
-static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries)
+static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries, bool to_delete)
 {
     double total_time = 0.0;
-    double time;
+    double time = 0.0;
 
     size_t i;
     size_t num_partitions = am->num_of_partitions;
 
     TRACE();
 
-    if (entries == 0)
+    if (entries == 0 || am->num_entries_in_partitions == 0)
         return 0.0;
 
     /* Journal will cutoff some partitions, lets assume for now that will cut a half */
@@ -247,35 +247,49 @@ static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries
     /* seek partitions in logarithmic way */
     for (i = 0; i < am->num_of_partitions; ++i)
     {
-        time = pcm_read(am->pcm, (size_t)DB_AM_LOG((double)(am->num_entries_in_partitions / am->num_of_partitions * am->entry_size), 2.0));
+        // time += pcm_read(am->pcm, (size_t)DB_AM_LOG((double)(am->num_entries_in_partitions * am->entry_size), 2.0));
+
+        for (size_t j = 0; j < (size_t)DB_AM_LOG((double)(am->num_entries_in_partitions * am->entry_size), 2.0); ++j)
+            time += pcm_read(am->pcm, 1);
+    }
+
+    db_stat_update_misc_time(time);
+    total_time += time;
+
+    if(!to_delete)
+    {
+        /* load entries */
+        time = pcm_read(am->pcm, entries * am->entry_size);
         db_stat_update_misc_time(time);
         total_time += time;
     }
 
-    /* load entries */
-    time = pcm_read(am->pcm, entries * am->entry_size);
-    db_stat_update_misc_time(time);
-    total_time += time;
-
     /* invalid entries */
+    time = 0.0;
     switch (am->invalidation_type)
     {
         case INVALIDATION_FLAG:
         {
             /* each entry needs a flag set to invalid */
             for (i = 0; i < entries; ++i)
-            {
-                time = pcm_write(am->pcm, 1);
-                db_stat_update_invalidation_time(time);
-                total_time += time;
-            }
+                time += pcm_write(am->pcm, 1);
+
+            db_stat_update_invalidation_time(time);
+            total_time += time;
 
             break;
         }
         case INVALIDATION_BITMAP:
         {
-            /* each partition has a bitmap, also 1 bitmap can store 64 entries, so each byte can store 8 entries */
-            time = pcm_write(am->pcm, (am->num_of_partitions + INT_CEIL_DIV(entries, 8)));
+            // /* each partition has a bitmap, also 1 bitmap can store 64 entries, so each byte can store 8 entries */
+            // time = pcm_write(am->pcm, (am->num_of_partitions + INT_CEIL_DIV(entries, 8)));
+
+            size_t entries_per_partition = INT_CEIL_DIV(entries, am->num_of_partitions);
+            for (i = 0; i < am->num_of_partitions; ++i)
+            {
+                /* each partition has a bitmap, also 1 bitmap can store 64 entries, so each byte can store 8 entries */
+                time += pcm_write(am->pcm, INT_CEIL_DIV(entries_per_partition, 8));
+            }
             db_stat_update_invalidation_time(time);
             total_time += time;
 
@@ -308,7 +322,7 @@ static ___inline___ double load_entries_from_partition(DB_AM *am, size_t entries
     }
 
     am->num_entries_in_partitions -= entries;
-    return time;
+    return total_time;
 }
 
 DB_AM *db_am_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_size, size_t buffer_size, size_t index_node_size, invalidation_type_t invalidation_type, btree_type_t index_type)
@@ -381,7 +395,7 @@ double db_am_search(DB_AM *am, query_t type, size_t entries)
     time += load_entries_from_index(am, entries_from_index);
 
     /* load from partition */
-    time += load_entries_from_partition(am, entries_from_partition);
+    time += load_entries_from_partition(am, entries_from_partition, false);
 
     /* insert loaded entries from partition into index */
     time += copy_entries_to_index(am, entries_from_partition);
@@ -434,14 +448,29 @@ double db_am_delete(DB_AM* am, size_t entries)
     time += db_index_delete(am->index, entries_from_index);
 
     /* delete from partition = insert to deletion Tree when we have normal AM */
-    if (am->index->type == BTREE_NORMAL)
+    if (am->index->type == BTREE_NORMAL || am->index->type == BTREE_NORMAL_INNERS_RAM)
     {
-        time += pcm_read(am->pcm, entries_from_partition * am->entry_size);
-        time += db_index_insert(am->deletion_index, entries_from_partition);
-        am->num_entries_in_partitions -= entries_from_partition;
+        if (entries_from_partition > 0)
+        {
+            double _time = 0.0;
+            for (size_t i = 0; i < am->num_of_partitions; ++i)
+            {
+                // time += pcm_read(am->pcm, (size_t)DB_AM_LOG((double)(am->num_entries_in_partitions * am->entry_size), 2.0));
+
+                for (size_t j = 0; j < (size_t)DB_AM_LOG((double)(am->num_entries_in_partitions * am->entry_size), 2.0); ++j)
+                    _time += pcm_read(am->pcm, 1);
+            }
+
+            _time += pcm_read(am->pcm, entries_from_partition * am->entry_size);
+            db_stat_update_index_time(_time);
+            time += _time;
+
+            time = db_index_insert(am->deletion_index, entries_from_partition);
+            am->num_entries_in_partitions -= entries_from_partition;
+        }
     }
     else
-        time += load_entries_from_partition(am, entries_from_partition);
+        time += load_entries_from_partition(am, entries_from_partition, true);
 
     return time;
 }

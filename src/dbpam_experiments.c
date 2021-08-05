@@ -18,7 +18,7 @@ void db_pam_experiment_workload(size_t entries)
     sgenrand((unsigned long)time(NULL));
 
     pcm = pcm_create_default_model();
-    pam = db_pam_create(pcm, entries, sizeof(int), 140, (size_t)(0.01 * (double)entries * 140), 10 * 140);
+    pam = db_pam_create(pcm, entries, sizeof(int), 140, (size_t)(0.01 * (double)entries * 140), 10 * 140, BTREE_WITH_BUFFERED_TREE);
     db_stat_reset();
 
     db_stat_start_query();

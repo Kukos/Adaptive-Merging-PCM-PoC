@@ -125,10 +125,12 @@ void experiment2(const char *file, size_t key_size, size_t data_size, size_t ent
 */
 void experiment3(const char *file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
 
+void experiment3_1(const char * const file, size_t key_size, size_t data_size, size_t entries, query_t type, double selectivity);
 
 typedef struct StressBatch
 {
     size_t rsearches;
+    size_t psearches;
     size_t inserts;
     size_t deletes;
 
@@ -141,5 +143,8 @@ void experiment_stress(const char* file, size_t key_size, size_t data_size, size
 
 void experiment_stress_step(const char* file, size_t key_size, size_t data_size, size_t entries, StressBatch* batch, size_t batches);
 
+void experiment_stress_pam_step(const char* file, size_t key_size, size_t data_size, size_t entries, StressBatch* batch, size_t batches);
+
+void experiment_index(const char * const file, size_t key_size, size_t data_size, size_t entries, StressBatch* batch, size_t batches);
 
 #endif

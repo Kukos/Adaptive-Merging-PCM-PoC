@@ -6,8 +6,6 @@
 #include <dbstat.h>
 #include <dbutils.h>
 
-#define CBTREE_WAIT_FOR_SPLIT (1.5)
-
 #define DB_INDEX_LOG(n, k) (log(n) / log(k))
 
 /*
@@ -67,6 +65,8 @@ static ___inline___ size_t db_index_keys_per_node(const DB_index *index);
 */
 static ___inline___ size_t db_index_get_inners_number(const DB_index *index);
 
+static double db_index_find_node(DB_index* index);
+
 static ___inline___ size_t db_index_keys_per_node(const DB_index *index)
 {
     const double keys_per_node = ceil(((double)index->node_size * index->node_factor) / (double)(index->key_size + sizeof(void *)));
@@ -110,6 +110,52 @@ static ___inline___ size_t db_index_get_inners_number(const DB_index *index)
     return inners;
 }
 
+static double db_index_find_node(DB_index* index)
+{
+    double time = 0.0;
+    ssize_t j;
+
+    switch (index->type)
+    {
+        case BTREE_NORMAL:
+        case CBTREE:
+        case OCBTREE:
+        case BTREE_2SECTION_NODE:
+        case BTREE_UNSORTED_LEAVES:
+        {
+            /* everything is sorted so scan each level using binary search */
+            for (j = 0; j < (ssize_t)(index->height - 1); ++j)
+                    time += pcm_read(index->pcm, index->node_size / 2); /* binary search is 2x faster than linera in avg due to cache misses */
+
+            break;
+        }
+        case BTREE_UNSORTED_INNERS_UNSORTED_LEAVES:
+        {
+            /* everything is unsorted so scan each level using linear search */
+            for (j = 0; j < (ssize_t)(index->height - 1); ++j)
+                time += pcm_read(index->pcm, index->node_size);
+
+            break;
+        }
+        case BTREE_NORMAL_INNERS_RAM:
+        case CBTREE_INNERS_RAM:
+        case BTREE_2SECTION_NODE_INNERS_RAM:
+        case BTREE_WITH_BUFFERED_TREE:
+        case BTREE_UNSORTED_LEAVES_INNERS_RAM:
+        {
+            /* Inners in RAM so skip */
+            break;
+        }
+        case BTREE_SKIP_COST:
+            break;
+
+        default:
+            break;
+    }
+
+    return time;
+}
+
 DB_index *db_index_create(PCM *pcm, size_t key_size, size_t entry_size, size_t node_size, double node_factor, btree_type_t btree_type)
 {
     DB_index *index;
@@ -129,6 +175,7 @@ DB_index *db_index_create(PCM *pcm, size_t key_size, size_t entry_size, size_t n
 
     index->num_entries = 0;
     index->height = 0;
+    index->buffered_operation = 0;
 
     return index;
 }
@@ -159,10 +206,30 @@ double db_index_insert(DB_index *index, size_t entries)
 
     TRACE();
 
+    if (index->type == BTREE_WITH_BUFFERED_TREE)
+    {
+        index->buffered_operation += entries;
+        if (index->buffered_operation >= BTREE_WITH_BUFFERED_TREE_BUFFER_SIZE)
+        {
+            index->num_entries += entries;
+
+            const size_t entries_to_insert = index->buffered_operation;
+            index->buffered_operation = 0;
+            /* temp workaround for breaking the unreal, perfect cache line insertion */
+            time = db_index_bulkload(index, entries_to_insert) * 4.0;
+            db_stat_update_index_time(time * 3);
+
+            /* we added them during buffering and in bulkload so sub bulklaod */
+            index->num_entries -= entries_to_insert;
+
+            return time;
+        }
+    }
+
     for (i = 0; i < entries; ++i)
     {
         /* Find place to insert new data */
-        time += db_index_point_search(index, 1);
+        time += db_index_find_node(index);
 
         /* check numbers of inners */
         old_inners = db_index_get_inners_number(index);
@@ -183,29 +250,29 @@ double db_index_insert(DB_index *index, size_t entries)
             case BTREE_NORMAL:
             {
                 /* insert in sorted order to leaf, so we need to move in avg half node */
-                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                time += pcm_write(index->pcm, index->node_size / 2);
 
                 /* now we can insert entry */
                 time += pcm_write(index->pcm, index->entry_size);
 
-                /*
-                   if we need new leaf, we can just write down half into new node, so in simulation it costs nothing.
-                   because prev costs include this one
-                */
-
                 /* we need to insert new pointer to inners, if we need a new leaf */
-                if (diff_leaves != 0)
+                if (diff_leaves > 0)
                 {
-                    /* make a gap, or move to another inner */
-                    time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                    /* split node */
+                    time += pcm_write(index->pcm, index->node_size / 2);
 
-                    /* write down a key with pointer */
+                    /* insert pointer to leaf into inner */
                     time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+                    time += pcm_write(index->pcm, index->node_size / 2);
 
-                    for (j = 0; j < (ssize_t)(diff_inners - 1); ++j)
+                    /* insert new inners */
+                    for (j = 0; j < (ssize_t)diff_inners; ++j)
                     {
+                        /* split node */
+                        time += pcm_write(index->pcm, index->node_size / 2);
+
                         /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
-                        time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                        time += pcm_write(index->pcm, index->node_size / 2);
 
                         /* write down a key with pointer */
                         time += pcm_write(index->pcm, index->key_size + sizeof(void *));
@@ -215,51 +282,62 @@ double db_index_insert(DB_index *index, size_t entries)
                 break;
             }
             case BTREE_UNSORTED_LEAVES:
-            case CBTREE: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
             {
-                /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
-                if (diff_leaves != 0)
-                {
-                    time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
-                    time += pcm_write(index->pcm, 1);
-
-                    /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
-                    time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
-
-                    /* write down a key with pointer */
-                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
-
-                    for (j = 0; j < (ssize_t)(diff_inners - 1); ++j)
-                    {
-                        /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
-                        time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
-
-                        /* write down a key with pointer */
-                        time += pcm_write(index->pcm, index->key_size + sizeof(void *));
-                    }
-                }
-
                 /* we need to write down, new entry at the end */
                 time += pcm_write(index->pcm, index->entry_size);
 
                 /* and we need to update bitmap */
                 time += pcm_write(index->pcm, 1);
+
+                if (diff_leaves > 0)
+                {
+                    /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    time += pcm_write(index->pcm, 1);
+
+                    /* insert pointer to leaf into inner */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+
+                    /* insert new inners */
+                    for (j = 0; j < (ssize_t)diff_inners; ++j)
+                    {
+                        /* split node */
+                        time += pcm_write(index->pcm, index->node_size / 2);
+
+                        /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
+                        time += pcm_write(index->pcm, index->node_size / 2);
+
+                        /* write down a key with pointer */
+                        time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+                    }
+                }
 
                 break;
             }
             case BTREE_UNSORTED_INNERS_UNSORTED_LEAVES:
-            case CBTREE_UNSORTED_INNSERS: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
+            case BTREE_2SECTION_NODE:
             {
-                /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
-                if (diff_leaves != 0)
+                /* we need to write down, new entry at the end */
+                time += pcm_write(index->pcm, index->entry_size);
+
+                /* and we need to update bitmap */
+                time += pcm_write(index->pcm, 1);
+
+                if (diff_leaves > 0)
                 {
-                    time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                    /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    time += pcm_write(index->pcm, 1);
+
+                    /* write down key + pointer to the new leaf */
+                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
                     time += pcm_write(index->pcm, 1);
 
                     for (j = 0; j < (ssize_t)diff_inners; ++j)
                     {
-                        /* we need to move inner */
-                        time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                        /* split node */
+                        time += pcm_write(index->pcm, index->node_size / 2);
 
                         /* write down a key with pointer */
                         time += pcm_write(index->pcm, index->key_size + sizeof(void *));
@@ -267,23 +345,85 @@ double db_index_insert(DB_index *index, size_t entries)
                         /* and we need to update bitmap */
                         time += pcm_write(index->pcm, 1);
                     }
+                }
+                break;
+            }
+            case CBTREE:
+            {
+                /* insert in sorted order to leaf, so we need to move in avg half node */
+                time += pcm_write(index->pcm, index->node_size / 2);
 
-                    /* we have not calculate insertion of new key, so do it now */
-                    if (diff_inners == 0)
-                    {
-                        time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+                /* now we can insert entry */
+                time += pcm_write(index->pcm, index->entry_size);
 
-                        /* and we need to update bitmap */
-                        time += pcm_write(index->pcm, 1);
-                    }
+                /* split = writing to OVF so it cost only writing entry */
+
+                index->buffered_operation += diff_leaves;
+                while (index->buffered_operation >= CBTREE_OPERATION_BUFFER_SIZE)
+                {
+                    /* insert */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+
+                    index->buffered_operation -= CBTREE_OPERATION_BUFFER_SIZE;
                 }
 
+                /* inners are not buffered */
+                for (j = 0; j < (ssize_t)diff_inners; ++j)
+                {
+                    /* split node */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+
+                    /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+
+                    /* write down a key with pointer */
+                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+                }
+
+                break;
+            }
+            case OCBTREE:
+            {
+                /* insert in sorted order to leaf, so we need to move in avg half node */
+                time += pcm_write(index->pcm, index->node_size / 2);
+
+                /* now we can insert entry */
+                time += pcm_write(index->pcm, index->entry_size);
+
+                /* split = writing to OVF so it cost only writing entry */
+
+                /* inners are also buffered */
+                index->buffered_operation += diff_leaves + diff_inners;
+                while (index->buffered_operation >= OCBTREE_OPERATION_BUFFER_SIZE)
+                {
+                    /* insert */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+
+                    index->buffered_operation -= OCBTREE_OPERATION_BUFFER_SIZE;
+                }
+
+                break;
+            }
+            case BTREE_NORMAL_INNERS_RAM:
+            case CBTREE_INNERS_RAM: /* OVF nodes do nothing if it is in RAM */
+            {
+                /* insert in sorted order to leaf, so we need to move in avg half node */
+                time += pcm_write(index->pcm, index->node_size / 2);
+
+                /* now we can insert entry */
+                time += pcm_write(index->pcm, index->entry_size);
+                break;
+            }
+            case BTREE_UNSORTED_LEAVES_INNERS_RAM:
+            case BTREE_2SECTION_NODE_INNERS_RAM:
+            {
                 /* we need to write down, new entry at the end */
                 time += pcm_write(index->pcm, index->entry_size);
 
                 /* and we need to update bitmap */
                 time += pcm_write(index->pcm, 1);
-
                 break;
             }
             case BTREE_SKIP_COST:
@@ -329,56 +469,40 @@ double db_index_bulkload(DB_index *index, size_t entries)
         time += pcm_write(index->pcm, (size_t)((double)index->node_size * index->node_factor) * diff_leaves);
 
     /* find place for each leaf */
-    time += db_index_point_search(index, diff_leaves);
+    for (i = 0; i < diff_leaves; ++i)
+        time += db_index_find_node(index);
 
     switch (index->type)
     {
         case BTREE_NORMAL:
         case BTREE_UNSORTED_LEAVES:
         {
+            /* make a gap, or move to another inner */
+            time += pcm_write(index->pcm, index->node_size / 2);
+
             for (i = 0; i < diff_leaves; ++i)
             {
-                /* make a gap, or move to another inner */
-                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
-
                 /* write down a key with pointer */
                 time += pcm_write(index->pcm, index->key_size + sizeof(void *));
             }
 
-            /* we calculate cost for inners, but if we need insert more inners than leaves, simulate this */
-            for (j = 0; j < (ssize_t)(diff_inners - diff_leaves); ++j)
+            /* insert new inners */
+            for (j = 0; j < (ssize_t)diff_inners; ++j)
             {
+                /* split node */
+                time += pcm_write(index->pcm, index->node_size / 2);
+
                 /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
-                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
-
-                /* write down a key with pointer */
-                time += pcm_write(index->pcm, index->key_size + sizeof(void *));
-            }
-            break;
-        }
-        case CBTREE: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
-        {
-            for (i = 0; i < (size_t)((double)diff_leaves / CBTREE_WAIT_FOR_SPLIT); ++i)
-            {
-                /* make a gap, or move to another inner */
-                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                time += pcm_write(index->pcm, index->node_size / 2);
 
                 /* write down a key with pointer */
                 time += pcm_write(index->pcm, index->key_size + sizeof(void *));
             }
 
-            /* we calculate cost for inners, but if we need insert more inners than leaves, simulate this */
-            for (j = 0; j < (ssize_t)(diff_inners - diff_leaves); ++j)
-            {
-                /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
-                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
-
-                /* write down a key with pointer */
-                time += pcm_write(index->pcm, index->key_size + sizeof(void *));
-            }
             break;
         }
         case BTREE_UNSORTED_INNERS_UNSORTED_LEAVES:
+        case BTREE_2SECTION_NODE:
         {
             for (i = 0; i < diff_leaves; ++i)
             {
@@ -391,8 +515,8 @@ double db_index_bulkload(DB_index *index, size_t entries)
 
             for (j = 0; j < (ssize_t)diff_inners; ++j)
             {
-                /* we need to move inner */
-                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                /* split node */
+                time += pcm_write(index->pcm, index->node_size / 2);
 
                 /* write down a key with pointer */
                 time += pcm_write(index->pcm, index->key_size + sizeof(void *));
@@ -400,30 +524,56 @@ double db_index_bulkload(DB_index *index, size_t entries)
                 /* and we need to update bitmap */
                 time += pcm_write(index->pcm, 1);
             }
+
             break;
         }
-        case CBTREE_UNSORTED_INNSERS: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
+        case CBTREE:
         {
-            for (i = 0; i < (size_t)((double)diff_leaves / CBTREE_WAIT_FOR_SPLIT); ++i)
+            index->buffered_operation += diff_leaves;
+
+            while (index->buffered_operation >= CBTREE_OPERATION_BUFFER_SIZE)
             {
-                /* write down a key with pointer at the end */
                 time += pcm_write(index->pcm, index->key_size + sizeof(void *));
 
-                /* update bitmap */
-                time += pcm_write(index->pcm, 1);
+                index->buffered_operation -= CBTREE_OPERATION_BUFFER_SIZE;
             }
 
+            /* inners are not buffered */
             for (j = 0; j < (ssize_t)diff_inners; ++j)
             {
-                /* we need to move inner */
-                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                /* split node */
+                time += pcm_write(index->pcm, index->node_size / 2);
+
+                /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
+                time += pcm_write(index->pcm, index->node_size / 2);
 
                 /* write down a key with pointer */
                 time += pcm_write(index->pcm, index->key_size + sizeof(void *));
-
-                /* and we need to update bitmap */
-                time += pcm_write(index->pcm, 1);
             }
+
+            break;
+        }
+        case OCBTREE:
+        {
+            /* inners are also buffered */
+            index->buffered_operation += diff_inners;
+            while (index->buffered_operation >= OCBTREE_OPERATION_BUFFER_SIZE)
+            {
+                /* insert */
+                time += pcm_write(index->pcm, index->node_size / 2);
+                time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+
+                index->buffered_operation -= OCBTREE_OPERATION_BUFFER_SIZE;
+            }
+        }
+        case BTREE_NORMAL_INNERS_RAM:
+        case BTREE_UNSORTED_LEAVES_INNERS_RAM:
+        case CBTREE_INNERS_RAM:
+        case BTREE_2SECTION_NODE_INNERS_RAM:
+        case BTREE_WITH_BUFFERED_TREE:
+        {
+            /* leaves have been built. So inners stuffs cost as nothing */
+            break;
         }
         case BTREE_SKIP_COST:
             break;
@@ -452,11 +602,12 @@ double db_index_point_search(DB_index *index, size_t entries)
         {
             case BTREE_NORMAL:
             case CBTREE:
-            case CBTREE_UNSORTED_INNSERS:
+            case OCBTREE:
+            case BTREE_2SECTION_NODE:
             {
                 /* everything is sorted so scan each level using binary search */
                 for (j = 0; j < (ssize_t)index->height; ++j)
-                    time += pcm_read(index->pcm, (size_t)DB_INDEX_LOG((double)index->node_size * index->node_factor, 2.0));
+                    time += pcm_read(index->pcm, index->node_size / 2); /* binary search is 2x faster than linera in avg due to cache misses */
 
                 break;
             }
@@ -464,11 +615,11 @@ double db_index_point_search(DB_index *index, size_t entries)
             {
                 /* scan inner using binary search */
                 for (j = 0; j < (ssize_t)(index->height - 1); ++j)
-                    time += pcm_read(index->pcm, (size_t)DB_INDEX_LOG((double)index->node_size * index->node_factor, 2.0));
+                    time += pcm_read(index->pcm, index->node_size / 2); /* binary search is 2x faster than linera in avg due to cache misses */
 
 
                 /* scan unsorted leaf */
-                time += pcm_read(index->pcm, (size_t)((double)index->node_size * index->node_factor));
+                time += pcm_read(index->pcm, index->node_size);
 
                 break;
             }
@@ -476,8 +627,23 @@ double db_index_point_search(DB_index *index, size_t entries)
             {
                 /* everything is unsorted so scan each level using linear search */
                 for (j = 0; j < (ssize_t)index->height; ++j)
-                    time += pcm_read(index->pcm, (size_t)((double)index->node_size * index->node_factor));
+                    time += pcm_read(index->pcm, index->node_size);
 
+                break;
+            }
+            case BTREE_NORMAL_INNERS_RAM:
+            case CBTREE_INNERS_RAM:
+            case BTREE_2SECTION_NODE_INNERS_RAM:
+            case BTREE_WITH_BUFFERED_TREE:
+            {
+                /* scan sorted leaf */
+                time += pcm_read(index->pcm, index->node_size / 2); /* binary search is 2x faster than linera in avg due to cache misses */
+                break;
+            }
+            case BTREE_UNSORTED_LEAVES_INNERS_RAM:
+            {
+                /* scan unsortef leaf */
+                time += pcm_read(index->pcm, index->node_size);
                 break;
             }
             case BTREE_SKIP_COST:
@@ -503,7 +669,7 @@ double db_index_range_search(DB_index *index, size_t entries)
     leaves = db_index_get_leaves_number_for_entries(entries, index->entry_size, (size_t)((double)index->node_size * index->node_factor));
 
     /* seek 1st leaf */
-    time += db_index_point_search(index, 1);
+    time += db_index_find_node(index);
 
     /* scan all */
     if (index->type != BTREE_SKIP_COST)
@@ -532,10 +698,22 @@ double db_index_delete(DB_index *index, size_t entries)
 
     TRACE();
 
+    /*
+        delete = drop during merge
+        so we will update the same bitmap,
+        buffer is in RAM so delete is free
+    */
+    if (index->type == BTREE_WITH_BUFFERED_TREE)
+    {
+        index->num_entries -= entries;
+
+        return 0.0;
+    }
+
     for (i = 0; i < entries; ++i)
     {
         /* Find place to delete data */
-        time += db_index_point_search(index, 1);
+        time += db_index_find_node(index);
 
         /* check numbers of inners */
         old_inners = db_index_get_inners_number(index);
@@ -555,27 +733,30 @@ double db_index_delete(DB_index *index, size_t entries)
         {
             case BTREE_NORMAL:
             {
-                /* delete from sorted order leaf, so we need to move in avg half node */
-                time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                /* insert in sorted order to leaf, so we need to move in avg half node */
+                time += pcm_write(index->pcm, index->node_size / 2);
 
-                /*
-                   if we need new leaf, we can just write down half into new node, so in simulation it costs nothing.
-                   because prev costs include this one
-                */
+                /* now we can insert entry */
+                time += pcm_write(index->pcm, index->entry_size);
 
                 /* we need to insert new pointer to inners, if we need a new leaf */
-                if (diff_leaves != 0)
+                if (diff_leaves > 0)
                 {
-                    /* make a gap, or move to another inner */
-                    time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                    /* merge node */
+                    time += pcm_write(index->pcm, index->node_size / 2);
 
-                    /* write down a key with pointer */
+                    /* insert pointer to leaf into inner */
                     time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+                    time += pcm_write(index->pcm, index->node_size / 2);
 
-                    for (j = 0; j < (ssize_t)(diff_inners - 1); ++j)
+                    /* insert new inners */
+                    for (j = 0; j < (ssize_t)diff_inners; ++j)
                     {
+                        /* merge node */
+                        time += pcm_write(index->pcm, index->node_size / 2);
+
                         /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
-                        time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                        time += pcm_write(index->pcm, index->node_size / 2);
 
                         /* write down a key with pointer */
                         time += pcm_write(index->pcm, index->key_size + sizeof(void *));
@@ -585,46 +766,62 @@ double db_index_delete(DB_index *index, size_t entries)
                 break;
             }
             case BTREE_UNSORTED_LEAVES:
-            case CBTREE: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
             {
-                /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
-                if (diff_leaves != 0)
+                /* we need to write down, new entry at the end */
+                time += pcm_write(index->pcm, index->entry_size);
+
+                /* and we need to update bitmap */
+                time += pcm_write(index->pcm, 1);
+
+                if (diff_leaves > 0)
                 {
-                    time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                    /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    time += pcm_write(index->pcm, 1);
 
-                    /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
-                    time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
-
-                    /* write down a key with pointer */
+                    /* insert pointer to leaf into inner */
+                    time += pcm_write(index->pcm, index->node_size / 2);
                     time += pcm_write(index->pcm, index->key_size + sizeof(void *));
 
-                    for (j = 0; j < (ssize_t)(diff_inners - 1); ++j)
+                    /* insert new inners */
+                    for (j = 0; j < (ssize_t)diff_inners; ++j)
                     {
+                        /* merge node */
+                        time += pcm_write(index->pcm, index->node_size / 2);
+
                         /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
-                        time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                        time += pcm_write(index->pcm, index->node_size / 2);
 
                         /* write down a key with pointer */
                         time += pcm_write(index->pcm, index->key_size + sizeof(void *));
                     }
                 }
 
-                /* and we need to update bitmap */
-                time += pcm_write(index->pcm, 1);
-
                 break;
             }
             case BTREE_UNSORTED_INNERS_UNSORTED_LEAVES:
-            case CBTREE_UNSORTED_INNSERS: /* CBTREE has sorted inners, but has OV node, so we can simulate is as unsorted leaves in case of insertion (min cost) */
+            case BTREE_2SECTION_NODE:
             {
-                /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
-                if (diff_leaves != 0)
+                /* we need to write down, new entry at the end */
+                time += pcm_write(index->pcm, index->entry_size);
+
+                /* and we need to update bitmap */
+                time += pcm_write(index->pcm, 1);
+
+                if (diff_leaves > 0)
                 {
-                    time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                    /* if we need a new leaf, we need to split node, move half of node to another leaf and set bitmap */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    time += pcm_write(index->pcm, 1);
+
+                    /* write down key + pointer to the new leaf */
+                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+                    time += pcm_write(index->pcm, 1);
 
                     for (j = 0; j < (ssize_t)diff_inners; ++j)
                     {
-                        /* we need to move inner */
-                        time += pcm_write(index->pcm, (size_t)(((double)index->node_size * index->node_factor) / 2));
+                        /* merge node */
+                        time += pcm_write(index->pcm, index->node_size / 2);
 
                         /* write down a key with pointer */
                         time += pcm_write(index->pcm, index->key_size + sizeof(void *));
@@ -633,9 +830,82 @@ double db_index_delete(DB_index *index, size_t entries)
                         time += pcm_write(index->pcm, 1);
                     }
                 }
+                break;
+            }
+            case CBTREE:
+            {
+                /* insert in sorted order to leaf, so we need to move in avg half node */
+                time += pcm_write(index->pcm, index->node_size / 2);
+
+                /* now we can insert entry */
+                time += pcm_write(index->pcm, index->entry_size);
+
+                index->buffered_operation += diff_leaves;
+                while (index->buffered_operation >= CBTREE_OPERATION_BUFFER_SIZE)
+                {
+                    /* merge node */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+
+                    /* insert */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+
+                    index->buffered_operation -= CBTREE_OPERATION_BUFFER_SIZE;
+                }
+
+                /* inners are not buffered */
+                for (j = 0; j < (ssize_t)diff_inners; ++j)
+                {
+                    /* merge node */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+
+                    /* we need a new pointer in inner node, but inners are sorted so make a gap, or move to new inner */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    /* write down a key with pointer */
+                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+                }
+
+                break;
+            }
+            case OCBTREE:
+            {
+                /* insert in sorted order to leaf, so we need to move in avg half node */
+                time += pcm_write(index->pcm, index->node_size / 2);
+
+                /* now we can insert entry */
+                time += pcm_write(index->pcm, index->entry_size);
+
+                /* inners are also buffered */
+                index->buffered_operation += diff_leaves + diff_inners;
+                while (index->buffered_operation >= OCBTREE_OPERATION_BUFFER_SIZE)
+                {
+                    /* insert */
+                    time += pcm_write(index->pcm, index->node_size / 2);
+                    time += pcm_write(index->pcm, index->key_size + sizeof(void *));
+
+                    index->buffered_operation -= OCBTREE_OPERATION_BUFFER_SIZE;
+                }
+
+                break;
+            }
+            case BTREE_NORMAL_INNERS_RAM:
+            case CBTREE_INNERS_RAM:
+            {
+                /* delete from sorted order to leaf, so we need to move in avg half node */
+                time += pcm_write(index->pcm, index->node_size / 2);
+
+                /* now we can insert entry */
+                time += pcm_write(index->pcm, index->entry_size);
+                break;
+            }
+            case BTREE_UNSORTED_LEAVES_INNERS_RAM:
+            case BTREE_2SECTION_NODE_INNERS_RAM:
+            {
+                /* we need to delete it down, new entry at the end */
+                time += pcm_write(index->pcm, index->entry_size);
+
                 /* and we need to update bitmap */
                 time += pcm_write(index->pcm, 1);
-
                 break;
             }
             case BTREE_SKIP_COST:

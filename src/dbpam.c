@@ -4,7 +4,7 @@
 #include <dbpam.h>
 #include <log.h>
 
-DB_PAM *db_pam_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_size, size_t buffer_size, size_t index_node_size)
+DB_PAM *db_pam_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entry_size, size_t buffer_size, size_t index_node_size, btree_type_t index_type)
 {
     DB_PAM *pam;
 
@@ -14,7 +14,7 @@ DB_PAM *db_pam_create(PCM *pcm, size_t num_entries, size_t key_size, size_t entr
     if (pam == NULL)
         ERROR("malloc error\n", NULL);
 
-    pam->am = db_am_create(pcm, num_entries, key_size, entry_size, buffer_size, index_node_size, INVALIDATION_JOURNAL, CBTREE_UNSORTED_INNSERS);
+    pam->am = db_am_create(pcm, num_entries, key_size, entry_size, buffer_size, index_node_size, INVALIDATION_JOURNAL, index_type);
     if (pam->am == NULL)
     {
         FREE(pam);
