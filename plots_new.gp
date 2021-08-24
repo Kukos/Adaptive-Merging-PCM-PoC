@@ -287,11 +287,47 @@ set terminal pdfcairo enhanced
 set datafile separator "\t"
 set termoption font ',16'
 
-set style line 1 lw 3 lc rgb "gold"
-set style line 2 lw 3 lc rgb "green"
-set style line 3 lw 3 lc rgb "blue"
-set style line 4 lw 3 lc rgb "red"
+# Line style for axes
+# Define a line style (we're calling it 80) and set
+# lt = linetype to 0 (dashed line)
+# lc = linecolor to a gray defined by that number
+set style line 80 lt 0 lc rgb "#808080"
+
+# Set the border using the linestyle 80 that we defined
+# 3 = 1 + 2 (1 = plot the bottom line and 2 = plot the left line)
+# back means the border should be behind anything else drawn
+set border 3 back ls 80
+
+# Line style for grid
+# Define a new linestyle (81)
+# linetype = 0 (dashed line)
+# linecolor = gray
+# lw = lineweight, make it half as wide as the axes lines
+set style line 81 lt 0 lc rgb "#808080" lw 0.5
+
+# Draw the grid lines for both the major and minor tics
+set grid xtics
+set grid ytics
+set grid mxtics
+set grid mytics
+
+# Put the grid behind anything drawn and use the linestyle 81
+set grid back ls 81
+
+# Create some linestyles for our data
+# pt = point type (triangles, circles, squares, etc.)
+# ps = point size
+# set style line 1 lt -1 lw 3 lc rgb '#990042' ps 1 pt 6 pi 1
+# set style line 2 lt -1 lw 3 lc rgb '#31f120' ps 1 pt 12 pi 1
+# set style line 3 lt -1 lw 3 lc rgb '#0044a5' ps 1 pt 9 pi 1
+# set style line 4 lt -1 lw 3 lc rgb '#888888' ps 1 pt 7 pi 1
+set style line 1 lt 1 lc rgb "#A00000" lw 2 pt 19 ps 1.5
+set style line 2 lt 1 lc rgb "#7cff40" lw 2 pt 8 ps 1.5
+set style line 3 lt 1 lc rgb "#5060D0" lw 2 pt 1 ps 1.5
+set style line 4 lt 1 lc rgb "#D0D000" lw 2 pt 6 ps 1.5
+
 set style increment user
+set style data linespoints
 
 set key top right Right maxrows 3
 
@@ -315,13 +351,13 @@ set output "ex4_1_stress_step1_time_total.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "SELECTIVITY"
-plot for [col=2:5] 'ex4_1_stress_step1_time_total.txt' using 1:col with lines title columnheader
+plot for [col=2:5] 'ex4_1_stress_step1_time_total.txt' using 1:col title columnheader
 
 set output "ex4_1_stress_step4_time_total.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "SELECTIVITY"
-plot for [col=2:5] 'ex4_1_stress_step4_time_total.txt' using 1:col with lines title columnheader
+plot for [col=2:5] 'ex4_1_stress_step4_time_total.txt' using 1:col title columnheader
 
 set yrange [*:2300]
 
@@ -329,4 +365,4 @@ set output "ex4_1_stress_step5_time_total.pdf"
 set title ""
 set ylabel "TIME [s]"
 set xlabel "SELECTIVITY"
-plot for [col=2:5] 'ex4_1_stress_step5_time_total.txt' using 1:col with lines title columnheader
+plot for [col=2:5] 'ex4_1_stress_step5_time_total.txt' using 1:col title columnheader
