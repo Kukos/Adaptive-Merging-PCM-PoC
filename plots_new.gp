@@ -366,3 +366,11 @@ set title ""
 set ylabel "TIME [s]"
 set xlabel "SELECTIVITY"
 plot for [col=2:5] 'ex4_1_stress_step5_time_total.txt' using 1:col title columnheader
+
+
+set yrange [*:280]
+set output "ex4_1_stress_step6_time_total.pdf"
+set title ""
+set ylabel "TIME [s]"
+set xlabel "SELECTIVITY"
+plot for [col=2:5] 'ex4_1_stress_step6_time_total.txt' using 1:col title columnheader

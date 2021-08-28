@@ -134,6 +134,21 @@ int main(void)
                                &(StressBatch){.inserts = 100000000, .deletes = 100000, .rsearches = 20, .selectivity_min = sel_min, .selectivity_max = sel_max, .selectivity_step = sel_step},
                                10);
 
+    // experiment_stress_pam_step("ex4_1_stress_step5B",
+    //                            table.key_size,
+    //                            table.data_size,
+    //                            table.entries,
+    //                            &(StressBatch){.inserts = 100000000, .deletes = 100000, .rsearches = 20, .selectivity_min = 0.01, .selectivity_max = 0.2, .selectivity_step = 0.01},
+    //                            10);
+
+
+    experiment_stress_pam_step("ex4_1_stress_step6",
+                               table.key_size,
+                               table.data_size,
+                               table.entries,
+                               &(StressBatch){.inserts = 10000000, .deletes = 10000 , .rsearches = 10, .selectivity_min = sel_min, .selectivity_max = sel_max, .selectivity_step = sel_step},
+                               10);
+
 
     return 0;
 }

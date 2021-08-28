@@ -654,7 +654,7 @@ void experiment_stress_pam_step(const char* file, size_t key_size, size_t data_s
         const size_t node_size = NODE_MAX_SIZE;
         // const size_t buffer_size = (size_t)(0.01 * (double)entries * (double)data_size);
         size_t buffer_size = SORT_BUFFER_SIZE;
-        if (strcmp(file, "ex4_1_stress_step4") == 0 || strcmp(file, "ex4_1_stress_step5") == 0)
+        if (strcmp(file, "ex4_1_stress_step4") == 0 || strcmp(file, "ex4_1_stress_step5") == 0 || strcmp(file, "ex4_1_stress_step6") == 0)
             buffer_size = SORT_BUFFER_SIZE * 30;
 
         TRACE();
